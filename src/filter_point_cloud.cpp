@@ -26,9 +26,13 @@ class FilterPointCloud : public rclcpp::Node
 {
 public:
     FilterPointCloud() : Node("filter_point_cloud"){
+        current_target_centroid_= {0.0f,0.0f,0.30f};
+        // bool is_tracking = false;
+        
         raw_cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/zedx/zed_node/point_cloud/cloud_registered", 10, std::bind(&FilterPointCloud::callbackFilterPointCloud, this,_1));
         filtered_cloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("filtered_point_cloud",10);
+        segmented_clusters_publisher_ = this ->create_publisher<sensor_msgs::msg::PointCloud2>("segmented_clusters",10);
     }
 private:
     void callbackFilterPointCloud(const sensor_msgs::msg::PointCloud2::SharedPtr message){
@@ -82,7 +86,7 @@ private:
         pcl::PointCloud<pcl::PointNormal>::Ptr sv_centroid_normal_cloud = pcl::SupervoxelClustering<pcl::PointXYZRGB>::makeSupervoxelNormalCloud(supervoxel_clusters);
 
         // LCCP Segmentation
-        float concavity_tolerance_thresh = 6;   // 10, 7, 5, 2 | too low starts to segment flat surface, 7 is best for Roy
+        float concavity_tolerance_thresh = 5;   // 10, 7, 5, 2 | too low starts to segment flat surface, 7 is best for Roy
         float smoothness_thresh = 5.7/180.0 * M_PI; //5.7
         std::uint32_t min_segment_size = 3;
         bool use_extended_convexity = true;
@@ -102,16 +106,83 @@ private:
         pcl::PointCloud<pcl::PointXYZL>::Ptr lccp_labeled_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
         pcl::copyPointCloud(*sv_labeled_cloud, *lccp_labeled_cloud);
         lccp.relabelCloud(*lccp_labeled_cloud);
-        
-        // Process cloud
+
+        // Isolate clusters
+        std::map<uint32_t, pcl::PointCloud<pcl::PointXYZL>::Ptr> isolated_clusters;
+        for (const auto& point:lccp_labeled_cloud->points){
+            uint32_t label = point.label;
+            if (label==0) continue;
+            
+            if (isolated_clusters.find(label) == isolated_clusters.end()){
+                isolated_clusters[label] = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
+                isolated_clusters[label]->header = lccp_labeled_cloud->header;
+            }
+            isolated_clusters[label]->points.push_back(point);
+        }
+        RCLCPP_INFO(this->get_logger(), "Separated into %ld distinct isolated clusters.", isolated_clusters.size());
+
+        // Centroid tracking
+        pcl::PointCloud<pcl::PointXYZL>::Ptr best_cluster = nullptr;
+        float min_distance = std::numeric_limits<float>::max();
+        for (const auto& pair : isolated_clusters){
+            pcl::PointCloud<pcl::PointXYZL>::Ptr cluster_cloud = pair.second;
+
+            Eigen::Vector4f centroid_4d;
+            pcl::compute3DCentroid(*cluster_cloud, centroid_4d);
+            Eigen::Vector3f cluster_centroid(centroid_4d[0], centroid_4d[1], centroid_4d[2]);
+
+            // Eigen::Vector3f target = {0.0f, 0.0f, 0.25f};
+            float distance = (cluster_centroid - current_target_centroid_).norm();
+            if (distance < min_distance){
+                min_distance = distance;
+                best_cluster = cluster_cloud;
+            }
+        }    
+
+        // Display cloud
         pcl::PointCloud<pcl::PointXYZL>::Ptr display_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
         display_cloud = lccp_labeled_cloud;
         
         // Publish cloud
-        sensor_msgs::msg::PointCloud2 msg;
-        pcl::toROSMsg(*display_cloud, msg);
-        msg.header = message->header;
-        filtered_cloud_publisher_->publish(msg);
+        sensor_msgs::msg::PointCloud2 filter_msg;
+        pcl::toROSMsg(*display_cloud, filter_msg);
+        filter_msg.header = message->header;
+        filtered_cloud_publisher_->publish(filter_msg);
+
+        if (best_cluster != nullptr){
+            Eigen::Vector4f new_centroid;
+            pcl::compute3DCentroid(*best_cluster, new_centroid);
+            current_target_centroid_ = Eigen::Vector3f(new_centroid[0], new_centroid[1], new_centroid[2]);
+            // is_tracking = true;
+
+            best_cluster->width = best_cluster->points.size();
+            best_cluster->height = 1;
+            best_cluster->is_dense = true;
+
+            sensor_msgs::msg::PointCloud2 cluster_msg;
+            pcl::toROSMsg(*best_cluster, cluster_msg);
+            cluster_msg.header = message->header; 
+            segmented_clusters_publisher_->publish(cluster_msg);
+        } else {
+            RCLCPP_WARN(this->get_logger(), "No valid clusters to track.");
+            // is_tracking = false;
+        }
+
+        // // Publish clusters
+        // for(const auto& pair : isolated_clusters){
+        //     uint32_t cluster_id = pair.first;
+        //     pcl::PointCloud<pcl::PointXYZL>::Ptr cluster_cloud = pair.second;
+
+        //     cluster_cloud->width = cluster_cloud->points.size();
+        //     cluster_cloud->height = 1;
+        //     cluster_cloud->is_dense = true;
+
+        //     sensor_msgs::msg::PointCloud2 cluster_msg;
+        //     pcl::toROSMsg(*cluster_cloud, cluster_msg);
+        //     cluster_msg.header = message->header;
+        //     segmented_clusters_publisher_->publish(cluster_msg);
+        // }
+
     }
 
     // REGION GROWING
@@ -186,8 +257,12 @@ private:
         return sac_cloud;
     }
 
+    // bool is_tracking;
+    Eigen::Vector3f current_target_centroid_;
+
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr raw_cloud_subscriber_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr filtered_cloud_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr segmented_clusters_publisher_;
 };
 int main(int argc, char **argv)
 {
