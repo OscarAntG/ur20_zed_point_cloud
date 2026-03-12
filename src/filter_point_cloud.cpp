@@ -27,7 +27,6 @@ class FilterPointCloud : public rclcpp::Node
 public:
     FilterPointCloud() : Node("filter_point_cloud"){
         current_target_centroid_= {0.0f,0.0f,0.30f};
-        // bool is_tracking = false;
         
         raw_cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
             "/zedx/zed_node/point_cloud/cloud_registered", 10, std::bind(&FilterPointCloud::callbackFilterPointCloud, this,_1));
@@ -76,13 +75,13 @@ private:
         std::map<std::uint32_t, pcl::Supervoxel<pcl::PointXYZRGB>::Ptr> supervoxel_clusters;
         super.extract(supervoxel_clusters);
         RCLCPP_INFO(this->get_logger(), "Found %ld supervoxels", supervoxel_clusters.size());
-        
+
         // Loading cloud - Point type changed to XYZL for labeled cloud, color information is lost
         pcl::PointCloud<pcl::PointXYZL>::Ptr sv_labeled_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
         sv_labeled_cloud = super.getLabeledCloud();
         std::multimap<std::uint32_t, std::uint32_t> supervoxel_adjacency;
         super.getSupervoxelAdjacency(supervoxel_adjacency);
-        
+
         pcl::PointCloud<pcl::PointNormal>::Ptr sv_centroid_normal_cloud = pcl::SupervoxelClustering<pcl::PointXYZRGB>::makeSupervoxelNormalCloud(supervoxel_clusters);
 
         // LCCP Segmentation
@@ -112,7 +111,7 @@ private:
         for (const auto& point:lccp_labeled_cloud->points){
             uint32_t label = point.label;
             if (label==0) continue;
-            
+
             if (isolated_clusters.find(label) == isolated_clusters.end()){
                 isolated_clusters[label] = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
                 isolated_clusters[label]->header = lccp_labeled_cloud->header;
@@ -130,7 +129,7 @@ private:
             Eigen::Vector4f centroid_4d;
             pcl::compute3DCentroid(*cluster_cloud, centroid_4d);
             Eigen::Vector3f cluster_centroid(centroid_4d[0], centroid_4d[1], centroid_4d[2]);
-
+            
             // Eigen::Vector3f target = {0.0f, 0.0f, 0.25f};
             float distance = (cluster_centroid - current_target_centroid_).norm();
             if (distance < min_distance){
@@ -138,10 +137,10 @@ private:
                 best_cluster = cluster_cloud;
             }
         }    
-
+        
         // Display cloud
         pcl::PointCloud<pcl::PointXYZL>::Ptr display_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZL>>();
-        display_cloud = lccp_labeled_cloud;
+        *display_cloud = *lccp_labeled_cloud;
         
         // Publish cloud
         sensor_msgs::msg::PointCloud2 filter_msg;
@@ -153,35 +152,16 @@ private:
             Eigen::Vector4f new_centroid;
             pcl::compute3DCentroid(*best_cluster, new_centroid);
             current_target_centroid_ = Eigen::Vector3f(new_centroid[0], new_centroid[1], new_centroid[2]);
-            // is_tracking = true;
-
             best_cluster->width = best_cluster->points.size();
             best_cluster->height = 1;
             best_cluster->is_dense = true;
-
             sensor_msgs::msg::PointCloud2 cluster_msg;
             pcl::toROSMsg(*best_cluster, cluster_msg);
             cluster_msg.header = message->header; 
             segmented_clusters_publisher_->publish(cluster_msg);
         } else {
             RCLCPP_WARN(this->get_logger(), "No valid clusters to track.");
-            // is_tracking = false;
         }
-
-        // // Publish clusters
-        // for(const auto& pair : isolated_clusters){
-        //     uint32_t cluster_id = pair.first;
-        //     pcl::PointCloud<pcl::PointXYZL>::Ptr cluster_cloud = pair.second;
-
-        //     cluster_cloud->width = cluster_cloud->points.size();
-        //     cluster_cloud->height = 1;
-        //     cluster_cloud->is_dense = true;
-
-        //     sensor_msgs::msg::PointCloud2 cluster_msg;
-        //     pcl::toROSMsg(*cluster_cloud, cluster_msg);
-        //     cluster_msg.header = message->header;
-        //     segmented_clusters_publisher_->publish(cluster_msg);
-        // }
 
     }
 

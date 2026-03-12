@@ -12,6 +12,8 @@ find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common io filters)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED)
 
 include_directories(
   include
@@ -29,6 +31,7 @@ add_definitions(
 add_executable(echo_point_cloud src/echo_point_cloud.cpp)
 add_executable(stats_point_cloud src/stats_point_cloud.cpp)
 add_executable(filter_point_cloud src/filter_point_cloud.cpp)
+add_executable(mask_point_cloud src/mask_point_cloud.cpp)
 add_executable(pcl_demo src/pcl_demo.cpp)
 
 
@@ -47,6 +50,13 @@ ament_target_dependencies(filter_point_cloud
   sensor_msgs
   pcl_conversions
 )
+ament_target_dependencies(mask_point_cloud
+  rclcpp
+  sensor_msgs
+  pcl_conversions  
+  cv_bridge
+  OpenCV
+)
 ament_target_dependencies(pcl_demo
   rclcpp
   sensor_msgs
@@ -56,12 +66,14 @@ ament_target_dependencies(pcl_demo
 target_link_libraries(echo_point_cloud ${PCL_LIBRARIES})
 target_link_libraries(stats_point_cloud ${PCL_LIBRARIES})
 target_link_libraries(filter_point_cloud ${PCL_LIBRARIES})
+target_link_libraries(mask_point_cloud ${PCL_LIBRARIES})
 target_link_libraries(pcl_demo ${PCL_LIBRARIES})
 
 install(TARGETS
   echo_point_cloud
   stats_point_cloud
   filter_point_cloud
+  mask_point_cloud
   pcl_demo
   DESTINATION lib/${PROJECT_NAME}
 )
