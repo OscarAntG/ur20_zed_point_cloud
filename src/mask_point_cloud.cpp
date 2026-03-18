@@ -23,6 +23,7 @@ public:
         mask_qos_profile.keep_last(1);
 
         mask_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("mask_point_cloud",10);
+        isolated_mask_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("isolated_mask_cloud",10);
         mask_subscriber_ = this->create_subscription<sensor_msgs::msg::Image>(
             "/active_sam3_mask", mask_qos_profile, std::bind(&MaskPointCloud::callbackMaskImage, this, _1));
         cloud_subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
@@ -68,6 +69,7 @@ private:
 
         // Mask mapping
         pcl::PointCloud<pcl::PointXYZRGB>::Ptr masked_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr isolated_mask_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZRGB>>();
 
         for (int v = 0; v < aligned_mask.rows; ++v){
             for(int u = 0; u < aligned_mask.cols; ++u){
@@ -77,8 +79,9 @@ private:
                         pt.r = 255;
                         pt.g = 0;
                         pt.b = 0;
-                        // Publish mask only, uncomment line below.
+                        // To publish mask only, uncomment line below.
                         masked_cloud->push_back(pt);
+                        isolated_mask_cloud->push_back(pt);
                     }
                 }
             }
@@ -86,13 +89,14 @@ private:
 
         *masked_cloud = *raw_cloud;
         masked_cloud->header = raw_cloud->header;
+        isolated_mask_cloud->header = raw_cloud->header;
         
         // Optional PassThrough Filter: isolates region of cloud
-        pcl::PassThrough<pcl::PointXYZRGB> pass;
-        pass.setInputCloud(masked_cloud);
-        pass.setFilterFieldName("x");
-        pass.setFilterLimits(0.0, 1.25); // whiteboard = 0.0, 1.25
-        pass.filter(*masked_cloud);
+        // pcl::PassThrough<pcl::PointXYZRGB> pass;
+        // pass.setInputCloud(masked_cloud);
+        // pass.setFilterFieldName("x");
+        // pass.setFilterLimits(0.0, 1.25); // whiteboard = 0.0, 1.25
+        // pass.filter(*masked_cloud);
         
         // Outlier removal
         pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
@@ -107,17 +111,24 @@ private:
         vg.setLeafSize(0.01f, 0.01f, 0.01f);
         vg.filter (*masked_cloud);
 
+        // Ball Pivoting
+        
 
-
-        // Publish cloud
+        // Publish clouds
         sensor_msgs::msg::PointCloud2 mask_msg;
         pcl::toROSMsg(*masked_cloud, mask_msg);
         mask_msg.header = message->header;
         mask_publisher_->publish(mask_msg);
+
+        sensor_msgs::msg::PointCloud2 isolated_mask_msg;
+        pcl::toROSMsg(*isolated_mask_cloud, isolated_mask_msg);
+        isolated_mask_msg.header = message->header;
+        isolated_mask_publisher_->publish(isolated_mask_msg);
     }
 
     cv::Mat latest_mask_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr mask_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr isolated_mask_publisher_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr mask_subscriber_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr cloud_subscriber_;
 };

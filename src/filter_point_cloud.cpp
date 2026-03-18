@@ -43,12 +43,12 @@ private:
             return;
         }
         
-        // Optional PassThrough Filter: isolates region of cloud
-        pcl::PassThrough<pcl::PointXYZRGB> pass;
-        pass.setInputCloud(pcl_cloud);
-        pass.setFilterFieldName("x");
-        pass.setFilterLimits(0.0, 1.25); // whiteboard = 0.0, 1.25
-        pass.filter(*pcl_cloud);
+        // // Optional PassThrough Filter: isolates region of cloud
+        // pcl::PassThrough<pcl::PointXYZRGB> pass;
+        // pass.setInputCloud(pcl_cloud);
+        // pass.setFilterFieldName("x");
+        // pass.setFilterLimits(0.0, 1.25); // whiteboard = 0.0, 1.25
+        // pass.filter(*pcl_cloud);
         
         // Outlier removal
         pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
