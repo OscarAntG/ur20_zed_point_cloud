@@ -111,9 +111,6 @@ private:
         vg.setLeafSize(0.01f, 0.01f, 0.01f);
         vg.filter (*masked_cloud);
 
-        // Ball Pivoting
-        
-
         // Publish clouds
         sensor_msgs::msg::PointCloud2 mask_msg;
         pcl::toROSMsg(*masked_cloud, mask_msg);
