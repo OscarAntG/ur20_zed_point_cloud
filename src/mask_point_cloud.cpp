@@ -115,7 +115,7 @@ private:
         sensor_msgs::msg::PointCloud2 mask_msg;
         pcl::toROSMsg(*masked_cloud, mask_msg);
         mask_msg.header = message->header;
-        mask_publisher_->publish(mask_msg);
+        // mask_publisher_->publish(mask_msg);
 
         sensor_msgs::msg::PointCloud2 isolated_mask_msg;
         pcl::toROSMsg(*isolated_mask_cloud, isolated_mask_msg);
