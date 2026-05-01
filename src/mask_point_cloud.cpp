@@ -92,11 +92,11 @@ private:
         isolated_mask_cloud->header = raw_cloud->header;
         
         // Optional PassThrough Filter: isolates region of cloud
-        // pcl::PassThrough<pcl::PointXYZRGB> pass;
-        // pass.setInputCloud(masked_cloud);
-        // pass.setFilterFieldName("x");
-        // pass.setFilterLimits(0.0, 1.25); // whiteboard = 0.0, 1.25
-        // pass.filter(*masked_cloud);
+        pcl::PassThrough<pcl::PointXYZRGB> pass;
+        pass.setInputCloud(masked_cloud);
+        pass.setFilterFieldName("x");
+        pass.setFilterLimits(1.50, 3.00); // whiteboard = 0.0, 1.25
+        pass.filter(*masked_cloud);
         
         // Outlier removal
         pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
@@ -115,7 +115,7 @@ private:
         sensor_msgs::msg::PointCloud2 mask_msg;
         pcl::toROSMsg(*masked_cloud, mask_msg);
         mask_msg.header = message->header;
-        // mask_publisher_->publish(mask_msg);
+        mask_publisher_->publish(mask_msg);
 
         sensor_msgs::msg::PointCloud2 isolated_mask_msg;
         pcl::toROSMsg(*isolated_mask_cloud, isolated_mask_msg);
