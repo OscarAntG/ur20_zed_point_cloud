@@ -1,6 +1,6 @@
 # **ur20_zed_point_cloud**
 
-Point cloud processing ROS2 package for a Dry Waste Retrieval project.  This repository integrates a ZED X stereo depth camera and a UR20 robotic arm using ROS 2.
+Point cloud processing ROS2 package for a Dry Waste Retrieval project. This repository integrates a ZED X stereo depth camera and a UR20 robotic arm using ROS 2.
 All point cloud processing is implemented in C++ and utilizes the Point Cloud Library (PCL).
 
 ## **Dependencies:**
